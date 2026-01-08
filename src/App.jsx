@@ -8,6 +8,7 @@ import {
   Upload, LogOut, KeyRound, History, Eye, Sparkles, FileSearch, Scan, FileWarning 
 } from 'lucide-react';
 
+// Estilos Neumorficos
 const styles = {
   bg: 'bg-[#F2F3F7]',
   glass: 'bg-white/70 backdrop-blur-xl border border-white/40 shadow-xl',
@@ -19,6 +20,7 @@ const styles = {
   readOnlyBadge: 'bg-white shadow-[inset_2px_2px_5px_#d1d9e6,inset_-2px_-2px_5px_#ffffff] rounded-xl px-4 py-2 text-slate-700 font-bold min-h-[40px] flex items-center'
 };
 
+// Utilidades
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 const formatMoney = (amount) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
 const cleanStr = (str) => str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
@@ -51,6 +53,7 @@ const loadPdfJs = () => {
   });
 };
 
+// Componentes UI
 const StatCard = ({ title, amount, icon: Icon, color, subtitle }) => (
   <div className={styles.card}>
     <div className="flex items-center justify-between mb-4">
@@ -172,7 +175,7 @@ const UploadModal = ({ isOpen, onClose, onSave, type, editingItem, nextFolio }) 
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in duration-300 overflow-y-auto">
       <div className={`${styles.glass} w-full ${isComplex || (type === 'ticket' && pdfPreview) ? 'max-w-6xl' : 'max-w-2xl'} p-8 rounded-[2.5rem] relative overflow-hidden my-auto shadow-2xl`}>
         <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-3 text-left">
+          <div className="flex items-center gap-3">
              <div className={`p-2 rounded-xl ${type === 'ticket' ? (ticketType === 'ingreso' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600') : 'bg-indigo-100 text-indigo-600'}`}>
                 {type === 'quote' ? <FileText size={20}/> : type === 'note' ? <Receipt size={20}/> : <Scan size={20}/>}
              </div>
@@ -182,7 +185,7 @@ const UploadModal = ({ isOpen, onClose, onSave, type, editingItem, nextFolio }) 
         </div>
         <div className={`grid grid-cols-1 ${ (isComplex || (type === 'ticket' && pdfPreview)) ? 'lg:grid-cols-2' : ''} gap-10`}>
           {type === 'ticket' ? (
-            <div className="space-y-8 flex flex-col h-full justify-center">
+            <div className="space-y-8 flex flex-col h-full justify-center text-left">
               <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl w-full shadow-inner">
                   <button onClick={() => { setTicketType('ingreso'); setFormData({...formData, ticketSubtype: 'ingreso'}); }} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${ticketType === 'ingreso' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400'}`}>INGRESO</button>
                   <button onClick={() => { setTicketType('egreso'); setFormData({...formData, ticketSubtype: 'egreso'}); }} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${ticketType === 'egreso' ? 'bg-rose-500 text-white shadow-lg' : 'text-slate-400'}`}>GASTO</button>
@@ -239,7 +242,7 @@ const UploadModal = ({ isOpen, onClose, onSave, type, editingItem, nextFolio }) 
                       </tbody>
                     </table>
                   </div>
-                  <button onClick={addItem} className="mt-4 text-[10px] font-black text-indigo-600 uppercase">+ Agregar Fila</button>
+                  <button onClick={() => setFormData(prev => ({ ...prev, items: [...prev.items, { id: generateId(), quantity: 1, description: '', unitPrice: 0 }] }))} className="mt-4 text-[10px] font-black text-indigo-600 uppercase">+ Agregar Fila</button>
                </div>
                <div className="bg-indigo-600 p-6 rounded-[2rem] text-white flex justify-between items-center shadow-2xl">
                   <span className="text-xs font-black uppercase tracking-widest opacity-80">Total Neto</span>
@@ -276,20 +279,27 @@ export default function App() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   const handleLogin = (e) => { e.preventDefault(); if (loginPass === password) { setIsAuthenticated(true); showToast("Acceso Concedido"); } else { showToast("Clave incorrecta"); setLoginPass(''); } };
-  const nextNoteFolio = useMemo(() => { if (!data.notes.length) return 1; return Math.max(...data.notes.map(n => parseInt(n.folio?.split('-')[1]) || 0)) + 1; }, [data.notes]);
+  
+  const generatePDF = async (item, docType) => {
+    showToast(`Generando...`);
+    const jspdf = await loadJsPDF();
+    const doc = new jspdf.jsPDF();
+    doc.setFillColor(30, 41, 59); doc.rect(0, 0, 210, 50, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.text("CIBER CENTRO IT MANAGER", 105, 20, { align: 'center' });
+    doc.setTextColor(50, 50, 50); doc.setFontSize(10); doc.text(`CLIENTE: ${cleanStr(item.client)}`, 20, 65);
+    doc.text(`RFC: ${item.rfc}`, 20, 72); doc.text(`FOLIO: ${item.folio}`, 140, 65);
+    doc.save(`${docType.toUpperCase()}_${item.id}.pdf`);
+  };
 
-  const fiscalReport = useMemo(() => {
-    const acceptedQuotes = data.quotes.filter(q => q.status === 'Aceptada');
-    const all = [...acceptedQuotes.map(q => ({...q, kind: 'ingreso'})), ...data.notes.map(n => ({...n, kind: 'ingreso'})), ...data.tickets];
-    return {
-      totalIngresos: all.filter(x => x.kind === 'ingreso' || x.ticketSubtype === 'ingreso').reduce((a, b) => a + Number(b.amount), 0),
-      totalEgresos: all.filter(x => x.ticketSubtype === 'egreso').reduce((a, b) => a + Number(b.amount), 0),
-      ivaTrasladado: all.filter(x => x.kind === 'ingreso' || x.ticketSubtype === 'ingreso').reduce((a, b) => a + (Number(b.iva) || 0), 0),
-      ivaAcreditable: all.filter(x => x.ticketSubtype === 'egreso').reduce((a, b) => a + (Number(b.iva) || 0), 0),
-      isrRetenido: all.reduce((a, b) => a + (Number(b.isr) || 0), 0),
-      pendingQuotesCount: data.quotes.filter(q => q.status !== 'Aceptada' && q.status !== 'Cancelada').length
-    };
-  }, [data]);
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'Aceptada': return 'bg-emerald-100 text-emerald-600 border-emerald-200';
+      case 'Cancelada': return 'bg-rose-100 text-rose-600 border-rose-200';
+      case 'Revision': return 'bg-blue-100 text-blue-600 border-blue-200';
+      case 'Borrador': return 'bg-slate-100 text-slate-500 border-slate-200';
+      default: return 'bg-amber-100 text-amber-600 border-amber-200';
+    }
+  };
 
   const handleSave = (formData) => {
     const key = `it_${modal.type}s`;
@@ -314,12 +324,10 @@ export default function App() {
     let csv = "Folio,Fecha,Concepto,Cliente,RFC,Estado,Subtotal,IVA,ISR,MontoTotal\n";
     all.forEach(row => { csv += `"${row.folio || row.id}","${row.date}","${cleanStr(row.title)}","${cleanStr(row.client)}","${row.rfc || ''}","${row.status || 'Aceptada'}","${Number(row.subtotal || 0).toFixed(2)}","${Number(row.iva || 0).toFixed(2)}","${Number(row.isr || 0).toFixed(2)}","${Number(row.amount || 0).toFixed(2)}"\n`; });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `IT_BACKUP_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    showToast("CSV Exportado");
+    link.href = URL.createObjectURL(blob);
+    link.download = `IT_BACKUP_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
   };
 
   const exportXLS = () => {
@@ -328,10 +336,9 @@ export default function App() {
     all.forEach(row => { xls += `<tr><td>${row.t}</td><td>${row.folio || row.id}</td><td>${row.date}</td><td>${cleanStr(row.title)}</td><td>${cleanStr(row.client)}</td><td>${row.rfc || ''}</td><td>${row.status || 'Aceptada'}</td><td>${Number(row.subtotal || 0).toFixed(2)}</td><td>${Number(row.iva || 0).toFixed(2)}</td><td>${Number(row.isr || 0).toFixed(2)}</td><td>${Number(row.amount || 0).toFixed(2)}</td></tr>`; });
     xls += "</table></body></html>";
     const blob = new Blob([xls], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `REPORT_TI_${new Date().toISOString().split('T')[0]}.xls`);
+    link.href = URL.createObjectURL(blob);
+    link.download = `REPORT_TI_${new Date().toISOString().split('T')[0]}.xls`;
     link.click();
   };
 
@@ -356,36 +363,20 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const updatePassword = () => {
-    if (newPass.length < 4) return showToast("Minimo 4 carac.");
-    Storage.setVal('it_sys_pass', newPass);
-    setPassword(newPass);
-    setNewPass('');
-    showToast("Seguridad Actualizada");
-  };
+  const fiscalReport = useMemo(() => {
+    const acceptedQuotes = data.quotes.filter(q => q.status === 'Aceptada');
+    const all = [...acceptedQuotes.map(q => ({...q, kind: 'ingreso'})), ...data.notes.map(n => ({...n, kind: 'ingreso'})), ...data.tickets];
+    return {
+      totalIngresos: all.filter(x => x.kind === 'ingreso' || x.ticketSubtype === 'ingreso').reduce((a, b) => a + Number(b.amount), 0),
+      totalEgresos: all.filter(x => x.ticketSubtype === 'egreso').reduce((a, b) => a + Number(b.amount), 0),
+      ivaTrasladado: all.filter(x => x.kind === 'ingreso' || x.ticketSubtype === 'ingreso').reduce((a, b) => a + (Number(b.iva) || 0), 0),
+      ivaAcreditable: all.filter(x => x.ticketSubtype === 'egreso').reduce((a, b) => a + (Number(b.iva) || 0), 0),
+      isrRetenido: all.reduce((a, b) => a + (Number(b.isr) || 0), 0),
+      pendingQuotesCount: data.quotes.filter(q => q.status !== 'Aceptada' && q.status !== 'Cancelada').length
+    };
+  }, [data]);
 
-  const generatePDF = async (item, docType) => {
-    showToast(`Preparando PDF...`);
-    const jspdf = await loadJsPDF();
-    const doc = new jspdf.jsPDF();
-    doc.setFillColor(30, 41, 59); doc.rect(0, 0, 210, 50, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.text("CIBER CENTRO IT MANAGER", 105, 20, { align: 'center' });
-    doc.setTextColor(50, 50, 50); doc.setFontSize(10); doc.text(`CLIENTE: ${cleanStr(item.client)}`, 20, 65);
-    doc.text(`RFC: ${item.rfc}`, 20, 72); doc.text(`FOLIO: ${item.folio}`, 140, 65);
-    doc.save(`${docType.toUpperCase()}_${item.id}.pdf`);
-  };
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Aceptada': return 'bg-emerald-100 text-emerald-600 border-emerald-200';
-      case 'Cancelada': return 'bg-rose-100 text-rose-600 border-rose-200';
-      case 'Revision': return 'bg-blue-100 text-blue-600 border-blue-200';
-      case 'Borrador': return 'bg-slate-100 text-slate-500 border-slate-200';
-      default: return 'bg-amber-100 text-amber-600 border-amber-200';
-    }
-  };
-
-  const renderListView = (type, Icon, label) => (
+  const renderListView = (type, IconComp, label) => (
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 text-left">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 text-left">
         <div><div className="flex items-center gap-3"><h1 className="text-3xl font-black text-slate-800 tracking-tight italic">{label}</h1><span className="bg-white px-3 py-1.5 rounded-full text-[10px] font-black text-indigo-500 shadow-sm border border-white uppercase">{data[`${type}s`].length} Items</span></div></div>
@@ -428,50 +419,48 @@ export default function App() {
       ) : (
         <>
           <aside className={`h-screen sticky top-0 bg-white/40 backdrop-blur-3xl border-r border-white/40 p-6 flex flex-col items-center md:items-stretch transition-all duration-500 ${isCollapsed ? 'w-24' : 'w-24 md:w-72'}`}>
-            <div className="flex items-center justify-center md:justify-between mb-16 px-2"><div className="flex items-center gap-3"><div className="w-12 h-12 bg-indigo-600 rounded-2xl shadow-xl flex items-center justify-center text-white shrink-0"><ShieldCheck size={24} /></div>{!isCollapsed && <div className="hidden md:block animate-in fade-in text-left"><h2 className="text-xl font-black tracking-tighter italic leading-none text-left">IT FLOW</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 text-left">SISTEMA v5.8</p></div>}</div></div>
-            <nav className="flex flex-col gap-4 flex-1 items-center md:items-stretch">
+            <div className="flex items-center justify-center md:justify-between mb-16 px-2 text-left"><div className="flex items-center gap-3"><div className="w-12 h-12 bg-indigo-600 rounded-2xl shadow-xl flex items-center justify-center text-white shrink-0"><ShieldCheck size={24} /></div>{!isCollapsed && <div className="hidden md:block animate-in fade-in text-left"><h2 className="text-xl font-black tracking-tighter italic leading-none text-left">IT FLOW</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 text-left">SISTEMA v5.8</p></div>}</div></div>
+            <nav className="flex flex-col gap-4 flex-1 items-center md:items-stretch text-left">
               <button onClick={() => setView('dashboard')} className={`${styles.button} ${view === 'dashboard' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-400 hover:text-slate-600'} ${isCollapsed ? 'p-3 justify-center' : 'md:justify-start'}`}><LayoutDashboard size={22} className="shrink-0" /> {!isCollapsed && <span className="hidden md:block ml-2 font-black text-xs uppercase tracking-widest">Resumen</span>}</button>
-              <div className="h-px bg-slate-200/50 my-2 w-full" />
+              <div className="h-px bg-slate-200/50 my-2 w-full text-left" />
               <button onClick={() => setView('quote')} className={`${styles.button} ${view === 'quote' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-400 hover:text-slate-600'} ${isCollapsed ? 'p-3 justify-center' : 'md:justify-start'}`}><FileText size={22} className="shrink-0" /> {!isCollapsed && <span className="hidden md:block ml-2 font-black text-xs uppercase tracking-widest">Cotizaciones</span>}</button>
               <button onClick={() => setView('note')} className={`${styles.button} ${view === 'note' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-400 hover:text-slate-600'} ${isCollapsed ? 'p-3 justify-center' : 'md:justify-start'}`}><Receipt size={22} className="shrink-0" /> {!isCollapsed && <span className="hidden md:block ml-2 font-black text-xs uppercase tracking-widest">Notas</span>}</button>
               <button onClick={() => setView('ticket')} className={`${styles.button} ${view === 'ticket' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-400 hover:text-slate-600'} ${isCollapsed ? 'p-3 justify-center' : 'md:justify-start'}`}><Ticket size={22} className="shrink-0" /> {!isCollapsed && <span className="hidden md:block ml-2 font-black text-xs uppercase tracking-widest">Tickets</span>}</button>
-              <div className="h-px bg-slate-200/50 my-2 w-full" />
+              <div className="h-px bg-slate-200/50 my-2 w-full text-left" />
               <button onClick={() => setView('settings')} className={`${styles.button} ${view === 'settings' ? 'bg-white shadow-md text-indigo-600' : 'text-slate-400 hover:text-slate-600'} ${isCollapsed ? 'p-3 justify-center' : 'md:justify-start'}`}><Settings size={22} className="shrink-0" /> {!isCollapsed && <span className="hidden md:block ml-2 font-black text-xs uppercase tracking-widest">Ajustes</span>}</button>
             </nav>
             <div className="flex flex-col gap-4 items-center md:items-stretch pt-4 text-left"><button onClick={() => setIsAuthenticated(false)} className={`${styles.button} text-red-500 hover:bg-red-50 ${isCollapsed ? 'p-3 justify-center' : 'md:justify-start'}`}><LogOut size={22} className="shrink-0" /> {!isCollapsed && <span className="hidden md:block ml-2 font-black text-xs uppercase tracking-widest">Salir</span>}</button><button onClick={() => setIsCollapsed(!isCollapsed)} className="p-3 rounded-2xl bg-white/50 text-slate-400 border border-white/80 hidden md:flex items-center justify-center">{isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}</button></div>
           </aside>
-          
           <main className="flex-1 p-6 md:p-12 max-w-7xl mx-auto w-full pb-32">
             {view === 'dashboard' && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
-                <header className="flex justify-between items-start text-left"><div><h1 className="text-3xl font-black text-slate-800 tracking-tight italic">Panel Administrativo</h1><p className="text-slate-500 font-medium">Visualizacion consolidada</p></div><div className="bg-white/80 px-5 py-2.5 rounded-2xl border border-white flex items-center gap-2 shadow-sm"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Online</span></div></header>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"><StatCard title="Ingresos" amount={fiscalReport.totalIngresos} icon={ArrowUpRight} color="bg-emerald-500" subtitle="Confirmados" /><StatCard title="IVA Ventas" amount={fiscalReport.ivaTrasladado} icon={Receipt} color="bg-blue-500" subtitle="Debitado" /><StatCard title="Gastos" amount={fiscalReport.totalEgresos} icon={ArrowDownLeft} color="bg-rose-500" subtitle="Egresos" /><StatCard title="IVA Favor" amount={fiscalReport.ivaAcreditable} icon={ShieldCheck} color="bg-amber-500" subtitle="Acreditable" /></div>
+                <header className="flex justify-between items-start text-left"><div><h1 className="text-3xl font-black text-slate-800 tracking-tight italic">Panel Administrativo</h1><p className="text-slate-500 font-medium">Visualizacion fiscal consolidada</p></div><div className="bg-white/80 px-5 py-2.5 rounded-2xl border border-white flex items-center gap-2 shadow-sm"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Status: Online</span></div></header>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left"><StatCard title="Ingresos" amount={fiscalReport.totalIngresos} icon={ArrowUpRight} color="bg-emerald-500" subtitle="Total confirmado" /><StatCard title="IVA Ventas" amount={fiscalReport.ivaTrasladado} icon={Receipt} color="bg-blue-500" subtitle="IVA Ventas" /><StatCard title="Gastos" amount={fiscalReport.totalEgresos} icon={ArrowDownLeft} color="bg-rose-500" subtitle="Tickets de gasto" /><StatCard title="IVA Favor" amount={fiscalReport.ivaAcreditable} icon={ShieldCheck} color="bg-amber-500" subtitle="IVA a favor" /></div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-left">
-                  <div className="lg:col-span-2 space-y-6 text-left text-left"><div className={styles.card}><h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2 italic text-left"><History size={20} className="text-indigo-500" /> Historial</h3><div className="space-y-4">
+                  <div className="lg:col-span-2 space-y-6 text-left"><div className={styles.card}><h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2 italic text-left"><History size={20} className="text-indigo-500" /> Movimientos del Ciclo</h3><div className="space-y-4">
                   {[...data.quotes.map(q=>({...q, k:'COT'})), ...data.notes.map(n=>({...n, k:'NOT'})), ...data.tickets.map(t=>({...t, k:'TIC'}))].sort((a,b)=>b.id-a.id).slice(0, 6).map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 bg-white/50 rounded-2xl border border-white transition-all text-left"><div className="flex items-center gap-4 text-left"><div className={`p-2.5 rounded-xl font-black text-[9px] ${item.ticketSubtype === 'egreso' || item.status === 'Cancelada' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>{item.k}</div><div><p className="text-sm font-black text-slate-700 leading-tight">{cleanStr(item.title)}</p><p className="text-[9px] text-slate-400 font-bold uppercase">{cleanStr(item.client)}</p></div></div><div className="text-right text-right"><p className="text-sm font-black text-slate-800">{formatMoney(item.finalTotal || item.amount)}</p><p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{item.date}</p></div></div>
+                    <div key={i} className="flex items-center justify-between p-4 bg-white/50 rounded-2xl border border-white transition-all text-left"><div className="flex items-center gap-4 text-left"><div className={`p-2.5 rounded-xl font-black text-[9px] ${item.ticketSubtype === 'egreso' || item.status === 'Cancelada' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>{item.k}</div><div><p className="text-sm font-black text-slate-700 leading-tight">{cleanStr(item.title)}</p><div className="flex items-center gap-2 mt-1"><p className="text-[9px] text-slate-400 font-bold uppercase">{cleanStr(item.client)}</p>{item.status && <span className={`text-[7px] px-1 rounded border ${getStatusColor(item.status)}`}>{item.status}</span>}</div></div></div><div className="text-right text-left"><p className="text-sm font-black text-slate-800">{formatMoney(item.finalTotal || item.amount)}</p><p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{item.date}</p></div></div>
                   ))}</div></div></div>
-                  <div className="space-y-8 text-left text-left text-left"><div className={`${styles.card} bg-slate-900 text-white relative overflow-hidden ring-4 ring-white shadow-2xl text-left`}><div className="relative z-10 text-left"><p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2 text-left">Resumen Fiscal</p><h4 className="text-2xl font-black text-indigo-200 text-left">Utilidad Operativa</h4><p className="text-4xl font-black mt-4 text-emerald-400 drop-shadow-md text-left">{formatMoney(fiscalReport.totalIngresos - fiscalReport.totalEgresos)}</p><div className="mt-10 pt-6 border-t border-white/10 space-y-4 text-left"><div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-left"><span className="text-slate-400">ISR RETENIDO:</span><span className="text-amber-400">{formatMoney(fiscalReport.isrRetenido)}</span></div><div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-left"><span className="text-slate-400">IVA DIFERENCIAL:</span><span className={fiscalReport.ivaTrasladado - fiscalReport.ivaAcreditable > 0 ? 'text-rose-400' : 'text-emerald-400'}>{formatMoney(fiscalReport.ivaTrasladado - fiscalReport.ivaAcreditable)}</span></div></div></div><TrendingUp size={240} className="absolute -bottom-24 -right-24 opacity-10 animate-pulse text-left" /></div></div>
+                  <div className="space-y-8 text-center md:text-left text-left text-left"><div className={`${styles.card} bg-slate-900 text-white relative overflow-hidden ring-4 ring-white shadow-2xl text-left text-left`}><div className="relative z-10 text-left"><p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2 text-left">Resumen Consolidado</p><h4 className="text-2xl font-black text-indigo-200 text-left">Utilidad Operativa</h4><p className="text-4xl font-black mt-4 text-emerald-400 drop-shadow-md text-left">{formatMoney(fiscalReport.totalIngresos - fiscalReport.totalEgresos)}</p><div className="mt-10 pt-6 border-t border-white/10 space-y-4 text-left text-left"><div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-left"><span className="text-slate-400">ISR RETENIDO:</span><span className="text-amber-400">{formatMoney(fiscalReport.isrRetenido)}</span></div><div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-left"><span className="text-slate-400">IVA DIFERENCIAL:</span><span className={fiscalReport.ivaTrasladado - fiscalReport.ivaAcreditable > 0 ? 'text-rose-400' : 'text-emerald-400'}>{formatMoney(fiscalReport.ivaTrasladado - fiscalReport.ivaAcreditable)}</span></div></div></div><TrendingUp size={240} className="absolute -bottom-24 -right-24 opacity-10 animate-pulse text-left" /></div></div>
                 </div>
               </div>
             )}
-            {view === 'quote' && renderListView('quote', FileText, 'Cotizaciones')}
-            {view === 'note' && renderListView('note', Receipt, 'Notas')}
-            {view === 'ticket' && renderListView('ticket', Ticket, 'Tickets')}
+            {view === 'quote' && renderListView('quote', FileText, 'Cotizaciones Profesionales')}
+            {view === 'note' && renderListView('note', Receipt, 'Notas de Venta')}
+            {view === 'ticket' && renderListView('ticket', Ticket, 'Modulo de Tickets')}
             {view === 'settings' && (
-              <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500 text-left text-left text-left text-left">
-                <header><h1 className="text-3xl font-black text-slate-800 tracking-tight italic">Ajustes</h1></header>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-left text-left text-left"><div className={styles.card}><div className="flex items-center gap-3 mb-6"><div className="p-2.5 rounded-xl bg-blue-100 text-blue-600 text-left text-left text-left"><Database size={20}/></div><h3 className="font-black text-slate-800 uppercase text-xs tracking-widest text-left">Respaldos</h3></div><div className="flex flex-col gap-4 text-left text-left text-left">
-                <button onClick={exportXLS} className={`${styles.button} ${styles.neumorphicBtn} justify-between group`}><div className="flex items-center gap-3 text-left"><FileSpreadsheet size={20} className="text-emerald-500" /><span className="text-sm font-bold">Descargar Excel</span></div><Download size={16}/></button>
-                <button onClick={exportCSV} className={`${styles.button} ${styles.neumorphicBtn} justify-between group`}><div className="flex items-center gap-3 text-left"><FileText size={20} className="text-blue-500" /><span className="text-sm font-bold">Descargar CSV</span></div><Download size={16}/></button></div></div>
-                <div className={styles.card}><div className="flex items-center gap-3 mb-6 text-left text-left"><div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-600 text-left"><Lock size={20}/></div><h3 className="font-black text-slate-800 uppercase text-xs tracking-widest text-left">Seguridad</h3></div><div className="flex gap-2 text-left text-left"><input className={styles.input} type="password" placeholder="Nueva Clave" value={newPass} onChange={e => setNewPass(e.target.value)} /><button onClick={updatePassword} className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg active:scale-90 transition-transform"><CheckCircle2 size={20}/></button></div></div>
-                <div className={`${styles.card} lg:col-span-2 text-left text-left text-left`}><div className="flex items-center gap-3 mb-6 text-left text-left text-left"><div className="p-2.5 rounded-xl bg-amber-100 text-amber-600 text-left"><Upload size={20}/></div><h3 className="font-black text-slate-800 uppercase text-xs tracking-widest text-left">Importacion Masiva</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left text-left text-left"><div className="space-y-4 text-left text-left"><p className="text-xs text-slate-500 font-medium">Carga registros masivos. Se marcaran como "PDF Faltante" para vincular despues.</p><div className="bg-slate-100 p-5 rounded-2xl border text-[10px] text-indigo-600 font-mono break-all font-black text-left text-left text-left">Folio, Fecha, Concepto, Cliente, RFC, Estado, Subtotal, IVA, ISR, Total</div></div><div className="relative group text-left text-left text-left"><input type="file" accept=".csv" onChange={handleImportCSV} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 text-left" /><div className="h-full min-h-[160px] border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center p-8 group-hover:border-amber-400 group-hover:bg-amber-50 transition-all text-left text-left text-left"><UploadCloud size={32} className="text-amber-500" /><p className="mt-4 text-sm font-black text-slate-400 text-left">Subir Respaldo CSV</p></div></div></div></div></div></div>
+              <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500 text-left text-left">
+                <header><h1 className="text-3xl font-black text-slate-800 tracking-tight italic text-left">Ajustes</h1></header>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-left text-left"><div className={styles.card}><div className="flex items-center gap-3 mb-6 text-left"><div className="p-2.5 rounded-xl bg-blue-100 text-blue-600 text-left"><Database size={20}/></div><h3 className="font-black text-slate-800 uppercase text-xs tracking-widest text-left">Respaldos</h3></div><div className="flex flex-col gap-4 text-left">
+                <button onClick={exportXLS} className={`${styles.button} ${styles.neumorphicBtn} justify-between group text-left`}><div className="flex items-center gap-3 text-left"><FileSpreadsheet size={20} className="text-emerald-500" /><span className="text-sm font-bold">Descargar Excel</span></div><Download size={16}/></button>
+                <button onClick={exportCSV} className={`${styles.button} ${styles.neumorphicBtn} justify-between group text-left`}><div className="flex items-center gap-3 text-left"><FileText size={20} className="text-blue-500" /><span className="text-sm font-bold">Descargar CSV</span></div><Download size={16}/></button></div></div>
+                <div className={styles.card}><div className="flex items-center gap-3 mb-6 text-left"><div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-600 text-left"><Lock size={20}/></div><h3 className="font-black text-slate-800 uppercase text-xs tracking-widest text-left">Seguridad</h3></div><div className="flex gap-2 text-left text-left"><input className={styles.input} type="password" placeholder="Nueva Clave" value={newPass} onChange={e => setNewPass(e.target.value)} /><button onClick={() => { if(newPass.length < 4) return showToast("Minimo 4 carac."); Storage.setVal('it_sys_pass', newPass); setPassword(newPass); setNewPass(''); showToast("Actualizada"); }} className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg active:scale-90 transition-transform text-left"><CheckCircle2 size={20}/></button></div></div>
+                <div className={`${styles.card} lg:col-span-2 text-left text-left`}><div className="flex items-center gap-3 mb-6 text-left text-left text-left"><div className="p-2.5 rounded-xl bg-amber-100 text-amber-600 text-left text-left"><Upload size={20}/></div><h3 className="font-black text-slate-800 uppercase text-xs tracking-widest text-left text-left">Importacion Masiva</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left text-left text-left text-left text-left"><div className="space-y-4 text-left text-left text-left"><p className="text-xs text-slate-500 font-medium text-left">Carga registros masivos. Se marcaran como "PDF Faltante" para vincular despues.</p><div className="bg-slate-100 p-5 rounded-2xl border text-[10px] text-indigo-600 font-mono break-all font-black text-left text-left text-left">Folio, Fecha, Concepto, Cliente, RFC, Estado, Subtotal, IVA, ISR, Total</div></div><div className="relative group text-left text-left text-left text-left"><input type="file" accept=".csv" onChange={handleImportCSV} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 text-left text-left" /><div className="h-full min-h-[160px] border-4 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center p-8 group-hover:border-amber-400 group-hover:bg-amber-50 transition-all text-left text-left text-left text-left"><UploadCloud size={32} className="text-amber-500" /><p className="mt-4 text-sm font-black text-slate-400 text-left text-left">Subir Respaldo CSV</p></div></div></div></div></div></div>
             )}
           </main>
         </>
       )}
-
-      <UploadModal isOpen={modal.open} onClose={() => setModal({ open: false, type: '', editing: null })} onSave={handleSave} type={modal.type} editingItem={modal.editing} nextFolio={nextNoteFolio} />
+      <UploadModal isOpen={modal.open} onClose={() => setModal({ open: false, type: '', editing: null })} onSave={handleSave} type={modal.type} editingItem={modal.editing} nextFolio={1} />
       <DeleteConfirmModal isOpen={deleteModal.open} itemTitle={deleteModal.title} onConfirm={confirmDelete} onCancel={() => setDeleteModal({ open: false, type: '', id: null, title: '' })} />
     </div>
   );
